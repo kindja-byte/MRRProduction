@@ -2083,14 +2083,19 @@ function Sidebar({ cur, onNav, user, onLogout, collapsed, setCollapsed, pendingR
       
       {/* Restored Clean Footer Panel inside the Sidebar Wrapper */}
       <div style={{ padding: '10px 6px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-<div 
-  onClick={() => onNav('profile')}
-  style={{ display: 'flex', alignItems: 'center', gap: 7, padding: 8, borderRadius: 7, background: cur === 'profile' ? 'rgba(245,168,0,0.15)' : 'rgba(255,255,255,0.06)', border: cur === 'profile' ? `1px solid ${C.gold}` : '1px solid transparent', marginBottom: 6, cursor: 'pointer', transition: 'background 0.2s' }}
-  title="Click to manage profile settings"
->          <div style={{ width: 30, height: 30, borderRadius: '50%', background: rColor(user.role), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900, color: C.w, flexShrink: 0 }}>{user.name[0]}</div>
+        <div 
+          onClick={() => onNav('profile')}
+          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: 8, borderRadius: 7, background: cur === 'profile' ? 'rgba(245,168,0,0.15)' : 'rgba(255,255,255,0.06)', border: cur === 'profile' ? `1px solid ${C.gold}` : '1px solid transparent', marginBottom: 6, cursor: 'pointer', transition: 'background 0.2s' }}
+          title="Click to manage profile settings"
+        >          
+          <div style={{ width: 30, height: 30, borderRadius: '50%', background: rColor(user.role), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900, color: C.w, flexShrink: 0 }}>
+            {user.name ? user.name[0] : (user.full_name ? user.full_name[0] : 'U')}
+          </div>
           {!collapsed && (
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.w, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.w, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user.name || user.full_name || 'Active User'}
+              </div>
               <div style={{ fontSize: 9, color: rColor(user.role), textTransform: 'capitalize', fontWeight: 600 }}>
                 {ROLES[user.role]?.label || user.role || 'Employee'}
               </div>
@@ -2100,28 +2105,16 @@ function Sidebar({ cur, onNav, user, onLogout, collapsed, setCollapsed, pendingR
         
         {!collapsed && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '0 4px' }}>
-            <button 
-              onClick={async () => {
-                const newPass = window.prompt("Enter your new secure password (min 8 characters):");
-                if (!newPass) return;
-                if (newPass.length < 8) return alert("Password must be at least 8 characters long.");
-                
-                const { error } = await supabase.auth.updateUser({ password: newPass });
-                if (error) alert("System Error: " + error.message);
-                else alert("Your password has been updated successfully!");
-              }} 
-              style={{ width: '100%', padding: '5px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 5, color: C.gold, fontSize: 11, cursor: 'pointer', fontWeight: 600, textAlign: 'center' }}
-            >
-              🔐 Change Password
-            </button>
-            
             <button onClick={onLogout} style={{ width: '100%', padding: 5, background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 5, cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 600 }}>
               Sign Out
             </button>
           </div>
         )}
-      </div> 
+      </div>
         </div>
+        
+        
+    
   );
 }
 // ── My Profile Page View ──────────────────────────
