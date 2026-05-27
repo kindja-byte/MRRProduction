@@ -2144,9 +2144,38 @@ function ProfileView({ user, onUpdateUser }) {
     setSubmittingProfile(true);
     
     // Update profile tracking details in Supabase user metadata
-    const { data, error } = await supabase.auth.updateUser({
-      data: { display_name: name.trim() }
-    });
+    const handleProfileUpdate = async (e) => {
+  e.preventDefault();
+  setProfileMsg({ text: '', isError: false });
+  if (!name.trim()) return setProfileMsg({ text: 'Name cannot be empty.', isError: true });
+
+  setSubmittingProfile(true);
+  
+  // 1. Update the Supabase Auth Metadata
+  const { error: authError } = await supabase.auth.updateUser({
+    data: { display_name: name.trim() }
+  });
+
+  if (authError) {
+    setSubmittingProfile(false);
+    return setProfileMsg({ text: `Auth Error: ${authError.message}`, isError: true });
+  }
+
+  // 2. Update the Permanent Database Profiles Table
+  const { error: dbError } = await supabase.from('profiles')
+    .update({ name: name.trim() })
+    .eq('id', user.id); // Matches the row belonging to the logged-in user
+
+  setSubmittingProfile(false);
+
+  if (dbError) {
+    setProfileMsg({ text: `Database Error: ${dbError.message}`, isError: true });
+  } else {
+    setProfileMsg({ text: '🎉 Profile permanently saved!', isError: false });
+    // Update the local app state so changes display instantly
+    onUpdateUser({ ...user, name: name.trim() });
+  }
+};
 
     setSubmittingProfile(false);
 
