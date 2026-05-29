@@ -84,3 +84,42 @@ export const detSt = v => {
     const d = (new Date() - new Date(v.ldd)) / 86400000;
   return d >= v.dii ? 'overdue' : d >= v.dii * 0.8 ? 'soon' : 'ok';
 };
+
+export const canReceiveSMS = (userProfile) => {
+  return (
+    userProfile &&
+    userProfile.receive_sms_alerts &&
+    userProfile.phone_number &&
+    userProfile.phone_number.trim().length >= 10
+  );
+};
+/**
+ * Dispatches an SMS alert payload over the secure Supabase Edge Function gateway.
+ * @param {string} phone - Target recipient cell number.
+ * @param {string} textMsg - Text notification body copy.
+ */
+export const dispatchSMSAlert = async (phone, textMsg) => {
+  if (!phone || !textMsg) return;
+
+  // Normalize phone formatting to strict E.164 compliance string
+  let cleanPhone = phone.replace(/\D/g, '');
+  if (cleanPhone.length === 10) {
+    cleanPhone = `+1${cleanPhone}`; // Enforces standard US country routing prefix
+  } else if (!cleanPhone.startsWith('+')) {
+    cleanPhone = `+${cleanPhone}`;
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('send-sms', {
+      body: { to: cleanPhone, message: textMsg },
+    });
+
+    if (error) {
+      console.error("SMS Gateway Relay Error:", error.message);
+    } else {
+      console.log("SMS notification packet dispatched cleanly:", data);
+    }
+  } catch (err) {
+    console.error("Failed to connect to SMS Edge Function:", err);
+  }
+};

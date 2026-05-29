@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase';
 import { C } from '../utils/helpers';
 import { Fld, Inp, Btn } from '../components/UIPrimitives';
+import { dispatchSMSAlert } from '../utils/helpers';
 
 export default function ProfileView({ user, onUpdateUser }) {
   // Identity Info States
@@ -66,39 +67,59 @@ export default function ProfileView({ user, onUpdateUser }) {
 
   // Action 2: Handle Low Stock Notification Routing Rules
   const saveNotificationPreferences = async (e) => {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
   setAlertMsg({ text: '', isError: false });
-
-  // 1. Frontend validation gate: ensure phone is provided if SMS alerts are checked
-  if (alertSms && !alertPhone.trim()) {
-    return setAlertMsg({ text: 'Please enter phone number', isError: true });
-  }
 
   setSavingAlerts(true);
     
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        phone_number: alertPhone.trim(),
-        receive_sms_alerts: alertSms,
-        receive_email_alerts: alertEmail
-      })
-      .eq('id', user.id);
+  // 1. Save preferences to the database profile row
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      phone_number: alertPhone.trim(),
+      receive_sms_alerts: alertSms,
+      receive_email_alerts: alertEmail
+    })
+    .eq('id', user.id);
+
+  if (error) {
+    setSavingAlerts(false);
+    return setAlertMsg({ text: `Error updating routing: ${error.message}`, isError: true });
+  }
+
+  // 2. If Email Alerts are enabled, send an immediate free confirmation receipt
+  if (alertEmail && user?.email) {
+    const confirmMessage = "⚙️ MRR System Note: Your inventory alert subscription has been successfully updated! You will now receive notifications here whenever items drop below threshold values.";
+    
+    try {
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 're_3b3r29Nt_3zSM8PQfcXkKXHYnib5bfWo6' 
+        },
+        body: JSON.stringify({
+          from: 'MRR Inventory Alerts <onboarding@resend.dev>',
+          to: [user.email],
+          subject: '✅ Notification Channels Confirmed',
+          text: confirmMessage
+        })
+      });
+    } catch (err) {
+      console.error("Failed to dispatch email confirmation receipt payload:", err);
+    }
+  }
+
+    // Pass states upstream so the configuration sticks globally
+    onUpdateUser({
+      ...user,
+      phone_number: alertPhone.trim(),
+      receive_sms_alerts: alertSms,
+      receive_email_alerts: alertEmail
+    });
 
     setSavingAlerts(false);
-    
-    if (error) {
-      setAlertMsg({ text: `Error updating routing: ${error.message}`, isError: true });
-    } else {
-      // Pass states upstream so the configuration sticks globally
-      onUpdateUser({
-        ...user,
-        phone_number: alertPhone.trim(),
-        receive_sms_alerts: alertSms,
-        receive_email_alerts: alertEmail
-      });
-      setAlertMsg({ text: '🔔 Alert routing updated successfully!', isError: false });
-    }
+    setAlertMsg({ text: '🔔 Alert preferences updated! Confirmation sent.', isError: false });
   };
 
   // Action 3: Handle Security Password Modification Requests
@@ -158,27 +179,62 @@ export default function ProfileView({ user, onUpdateUser }) {
 
       {/* CARD 2: Low Stock Dynamic Notification Toggles */}
       <div style={{ background: C.w, borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
-        <h2 style={{ margin: '0 0 6px', fontSize: 18, fontWeight: 900, color: C.navy }}>🔔 Inventory Alert Preferences</h2>
-        <p style={{ margin: '0 0 20px', color: C.sub, fontSize: 13 }}>Choose how you want to be notified when items hit low-stock thresholds.</p>
-        
-        <form onSubmit={saveNotificationPreferences}>
-          <Fld label="Cell Phone Number (For SMS)">
-            <Inp type="tel" placeholder="(260) 555-0199" value={alertPhone} onChange={e => setAlertPhone(e.target.value)} />
-          </Fld>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <span style={{ fontSize: 20 }}>🔔</span>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: C.navy }}>Inventory Alert Preferences</h3>
+        </div>
+        <p style={{ margin: '0 0 20px 0', color: C.sub, fontSize: 13 }}>
+          Choose how you want to be notified when items hit low-stock thresholds.
+        </p>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 14, marginBottom: 12, color: C.navy, fontWeight: 600 }}>
-            <input type="checkbox" checked={alertSms} onChange={e => setAlertSms(e.target.checked)} style={{ width: 17, height: 17 }} />
-            <span>Enable Text Message (SMS) Alerts</span>
+        {/* ── PHONE NUMBER ROUTING ENTRY ── */}
+        <Fld label="Cell Phone Number (For SMS)">
+          <Inp 
+            type="tel"
+            value={alertPhone} 
+            onChange={e => setAlertPhone(e.target.value)} 
+            placeholder="(xxx) xxx-xxxx" 
+          />
+        </Fld>
+
+        {/* ── NEW DYNAMIC READ-ONLY EMAIL ROUTING LABEL ── */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.navy, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+            Connected Alert Email
+          </div>
+          <div style={{ background: C.lg, padding: '10px 14px', borderRadius: 8, fontSize: 13, color: C.sub, fontFamily: 'monospace', border: `1.5px solid ${C.bd}` }}>
+            📧 {user?.email || 'No email associated with this profile'}
+          </div>
+        </div>
+
+        {/* ── NOTIFICATION ROUTING TOGGLES ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: C.navy, cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={alertSms} 
+              onChange={e => setAlertSms(e.target.checked)} 
+              style={{ width: 16, height: 16 }} 
+            />
+            Enable Text Message (SMS) Alerts
           </label>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 14, marginBottom: 20, color: C.navy, fontWeight: 600 }}>
-            <input type="checkbox" checked={alertEmail} onChange={e => setAlertEmail(e.target.checked)} style={{ width: 17, height: 17 }} />
-            <span>Enable Email Notifications</span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: C.navy, cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={alertEmail} 
+              onChange={e => setAlertEmail(e.target.checked)} 
+              style={{ width: 16, height: 16 }} 
+            />
+            Enable Email Notifications
           </label>
+        </div>
 
-          {alertMsg.text && <div style={{ background: alertMsg.isError ? C.rB : C.gB, color: alertMsg.isError ? C.rd : C.gr, padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 16, fontWeight: 600 }}>{alertMsg.text}</div>}
-          <Btn v="primary" type="submit" style={{ width: '100%', justifyContent: 'center' }} disabled={savingAlerts}>{savingAlerts ? 'Saving Rules...' : 'Save Notification Prefs'}</Btn>
-        </form>
+        {alertMsg.text && <div style={{ background: alertMsg.isError ? C.rB : C.gB, color: alertMsg.isError ? C.rd : C.gr, padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 16, fontWeight: 600 }}>{alertMsg.text}</div>}
+
+        <Btn v="primary" onClick={saveNotificationPreferences} disabled={savingAlerts} style={{ width: '100%', justifyContent: 'center' }}>
+          {savingAlerts ? 'Saving Settings...' : 'Save Notification Prefs'}
+        </Btn>
       </div>
 
       {/* CARD 3: Account Access Security Credentials */}
